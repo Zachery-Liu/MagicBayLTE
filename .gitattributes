@@ -1,0 +1,4 @@
+* text=auto
+third_party/*.bz2 binary
+# Preserve the original upstream license verbatim, including its whitespace.
+licenses/LGPL-2.1.txt -whitespace
