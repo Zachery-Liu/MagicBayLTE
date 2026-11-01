@@ -36,6 +36,11 @@ def main(argv=None):
         assert not list(target.glob('*-state.json')), 'Private state in package'
         app = payload / 'Applications/Magic Bay LTE.app'
         subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(app)], check=True)
+        legal = app / 'Contents/Resources/Licenses'
+        for name, source_name in (('AGPL-3.0.txt', 'LICENSE'), ('NOTICE.txt', 'NOTICE'),
+                                 ('MIT-cellular.txt', 'LICENSE-cellular.txt'),
+                                 ('LGPL-2.1.txt', 'LGPL-2.1.txt'), ('MIT-Octicons.txt', 'LICENSE-Octicons.txt')):
+            assert sha(legal / name) == sha(target / 'Source' / source_name), 'Bundled legal notice mismatch'
         runtime = json.loads((target / 'installed-build.json').read_text())
         for name, expected in runtime['sha256'].items():
             assert sha(target / name) == expected, 'Payload hash mismatch: ' + name

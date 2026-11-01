@@ -3,14 +3,11 @@ set -eu
 base='/Library/Application Support/MagicBayLTE'
 /bin/mkdir -p "$base/logs"
 /usr/sbin/chown root:wheel "$base" "$base/logs"
-/bin/chmod 755 "$base" "$base/logs"
-# A fresh installation must not silently opt into billable mobile data.
-# Existing enabled/disabled intent is preserved on upgrade.
-if [ ! -e "$base/preferences.json" ]; then
-    /usr/bin/printf '%s\n' '{"enabled": false}' > "$base/preferences.json"
-    /usr/sbin/chown root:wheel "$base/preferences.json"
-    /bin/chmod 600 "$base/preferences.json"
-fi
+/bin/chmod 755 "$base"
+/bin/chmod 700 "$base/logs"
+# Shared, offline-tested policy: missing preference means disabled; only explicit
+# saved consent survives an upgrade. Restrict diagnostics before launchd opens logs.
+/usr/bin/python3 -c 'import sys;sys.path.insert(0,"/Library/Application Support/MagicBayLTE");import lte_service;lte_service.prepare_install(lte_service.TARGET)'
 /bin/launchctl enable system/local.magicbay.lte.auto
 /bin/launchctl bootstrap system /Library/LaunchDaemons/local.magicbay.lte.auto.plist
 /usr/bin/python3 -c 'import sys; sys.path.insert(0,"/Library/Application Support/MagicBayLTE"); import lte_service; lte_service.wait_ready()'

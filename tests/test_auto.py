@@ -347,6 +347,7 @@ class Supervisor(unittest.TestCase):
         self.assertTrue(definition['RunAtLoad'])
         self.assertNotIn('UserName',definition)
         self.assertTrue(definition['KeepAlive'])
+        self.assertEqual(definition['Umask'],0o077)
         self.assertEqual(auto.LOCK,legacy.LOCK)
 
     def test_upgrade_waits_until_launchd_finishes_removing_old_helper(self):

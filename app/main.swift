@@ -100,7 +100,20 @@ import ServiceManagement
 
 MainActor.assumeIsolated {
 let arguments = CommandLine.arguments
-if arguments.contains("--register-login") {
+if let index = arguments.firstIndex(of:"--render-about-preview"), arguments.count > index+1 {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.prohibited)
+    let view = NSHostingView(rootView:AboutView())
+    let size = view.fittingSize
+    view.frame = NSRect(origin:.zero,size:size)
+    let window = NSWindow(contentRect:view.frame,styleMask:[.borderless],backing:.buffered,defer:false)
+    window.contentView = view
+    window.layoutIfNeeded()
+    view.layoutSubtreeIfNeeded()
+    guard let bitmap = view.bitmapImageRepForCachingDisplay(in:view.bounds) else { fatalError("No bitmap") }
+    view.cacheDisplay(in:view.bounds,to:bitmap)
+    try! bitmap.representation(using:.png,properties:[:])!.write(to:URL(fileURLWithPath:arguments[index+1]))
+} else if arguments.contains("--register-login") {
     do {
         try LoginItem.setEnabled(true)
         print("LOGIN_STATUS \(SMAppService.mainApp.status.rawValue)")

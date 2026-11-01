@@ -17,7 +17,7 @@ RUNTIME = BUILD / 'runtime'
 TOOLS = BUILD / 'tools'
 LIBUSB = BUILD / 'deps/libusb-1.0.29/libusb'
 RUNTIME_SOURCES = ('lte_auto.py', 'failover_policy.py', 'lte_helper.py',
-                   'lte_service.py', 'network_events.py')
+                   'lte_service.py', 'network_events.py', 'local_access.py', 'install_state.py')
 
 
 def environment():

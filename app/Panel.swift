@@ -75,6 +75,7 @@ struct LTEPanel: View {
                     Button("打开 LTE 日志") { model.openLogs() }
                     Toggle("登录时显示图标",isOn:Binding(get:{model.loginEnabled},set:{model.setLogin($0)}))
                     Divider()
+                    Button("关于与开源许可证") { AboutWindow.show() }
                     Button("退出 Magic Bay LTE") { NSApplication.shared.terminate(nil) }
                 } label: { Image(systemName:"ellipsis.circle").font(.system(size:18)).frame(width:28,height:28) }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("更多选项")

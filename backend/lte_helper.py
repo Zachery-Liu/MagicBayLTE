@@ -7,7 +7,6 @@ The socket and all executable/configuration parents are administrator owned.
 import ctypes
 from datetime import datetime, timezone
 import fcntl
-import json
 import os
 from pathlib import Path
 import signal
@@ -16,6 +15,8 @@ import stat
 import subprocess
 import time
 import lte_auto as auto
+import local_access
+import install_state
 
 BASE = Path(__file__).resolve().parent
 SOCKET = BASE/'control.sock'
@@ -24,11 +25,8 @@ STATE = BASE/'helper-state.json'
 STOP = False
 
 
-def atomic_json(path, value, mode=0o644):
-    temporary = path.with_suffix('.new')
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2))
-    temporary.chmod(mode)
-    temporary.replace(path)
+def atomic_json(path, value):
+    local_access.write_json(path, value, private=(path == PREFERENCE))
 
 
 def console_uid():
@@ -44,12 +42,7 @@ def peer_uid(connection):
 
 
 def read_preference():
-    if not PREFERENCE.exists():
-        return True  # migrate the previously installed, enabled service
-    data = json.loads(PREFERENCE.read_text())
-    if type(data.get('enabled')) is not bool:
-        raise ValueError('Invalid root-owned LTE preference')
-    return data['enabled']
+    return install_state.read_preference(PREFERENCE)
 
 
 def accept_command(connection, enabled, reconnect=None):
@@ -76,7 +69,7 @@ def accept_command(connection, enabled, reconnect=None):
         connection.sendall(b'INVALID\n')
         return enabled
     desired = data == b'E\n'
-    atomic_json(PREFERENCE, {'enabled': desired}, 0o600)
+    atomic_json(PREFERENCE, {'enabled': desired})
     connection.sendall(b'OK\n')
     return desired
 
@@ -109,14 +102,18 @@ def run():
     STOP = False
     if os.geteuid() != 0:
         raise PermissionError('Helper requires administrator installation')
+    os.umask(0o077)
     # Never execute code from a writable installation directory.
     for path in (BASE, BASE/'lte_auto.py', BASE/'lte_helper.py',
-                 BASE/'failover_policy.py', BASE/'magicbay_lte_managed'):
+                 BASE/'failover_policy.py', BASE/'local_access.py',
+                 BASE/'install_state.py', BASE/'magicbay_lte_managed'):
         info = path.stat()
         if info.st_uid != 0 or info.st_mode & 0o022:
             raise PermissionError('Unsafe helper installation: '+str(path))
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, stop_signal)
+    access_uid = console_uid()
+    local_access.configure(BASE, access_uid)
     enabled = read_preference()
     enabled_at = datetime.now(timezone.utc).isoformat()
     child = None
@@ -139,7 +136,11 @@ def run():
             server.settimeout(0.5)
             try:
                 while not STOP:
-                    os.chown(SOCKET, console_uid(), -1)
+                    uid = console_uid()
+                    if uid != access_uid:
+                        local_access.configure(BASE, uid)
+                        access_uid = uid
+                    os.chown(SOCKET, uid, -1)
                     os.chmod(SOCKET, 0o600)
                     if child is not None and child.poll() is not None:
                         child = None

@@ -65,7 +65,7 @@ static void mbm_export(unsigned cid)
     fputs("}\n",f);
     int bad=ferror(f);
     if (fclose(f)) bad=1;
-    if (!bad) { chmod(temporary,0644);rename(temporary,path); }
+    if (!bad) { chmod(temporary,0600);rename(temporary,path); }
 }
 static int mbm_disconnected(int result)
 {

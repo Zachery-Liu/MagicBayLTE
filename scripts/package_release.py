@@ -13,10 +13,11 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 BASE = Path(__file__).resolve().parents[1]
-VERSION = '1.4.2'
+VERSION = '1.4.3'
 IDENTIFIER = 'io.github.zachery-liu.magicbaylte'
 RUNTIME = ('lte_auto.py', 'failover_policy.py', 'magicbay_lte_managed',
-           'lte_helper.py', 'network_events.py', 'magicbay_network_watch', 'lte_service.py')
+           'lte_helper.py', 'network_events.py', 'magicbay_network_watch', 'lte_service.py',
+           'local_access.py', 'install_state.py')
 RUNTIME_DIR = BASE / 'build/runtime'
 
 
@@ -52,6 +53,9 @@ def verify():
         if digest(BASE / 'app' / name) != sha:
             raise RuntimeError('Stale app build: ' + name)
     app = BASE / 'build/app/Magic Bay LTE.app'
+    for name, sha in app_manifest['legal_sha256'].items():
+        if digest(BASE / name) != sha or digest(app / 'Contents/Resources/Licenses' / app_manifest['legal_files'][name]) != sha:
+            raise RuntimeError('Stale bundled legal notice: ' + name)
     if digest(app / 'Contents/MacOS/Magic Bay LTE') != app_manifest['executable_sha256']:
         raise RuntimeError('App executable changed')
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
@@ -147,7 +151,7 @@ def main(argv=None):
         resources = work / 'resources'
         resources.mkdir()
         welcome = resources / 'Welcome.html'
-        welcome.write_text('<html><meta charset="utf-8"><body><h1>Magic Bay LTE 1.4.2</h1>'
+        welcome.write_text('<html><meta charset="utf-8"><body><h1>Magic Bay LTE '+VERSION+'</h1>'
             '<p>Intel macOS 13+ · Lenovo Magic Bay LTE (17ef:7240)</p>'
             '<p>需要先安装 Apple 命令行工具（Python 3.9+）。安装会添加菜单栏应用和 root 后台助手。'
             '更新会短暂停止旧 LTE 服务，请先恢复其他网络并退出旧界面。</p>'

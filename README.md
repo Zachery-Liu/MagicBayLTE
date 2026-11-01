@@ -58,6 +58,7 @@ Lenovo, Magic Bay, Apple, and macOS are trademarks of their respective owners. R
 - **… → 重新连接 LTE**：结束现有 LTE 会话并重新初始化连接。
 - **… → 运营商服务 ↗**：打开 Lenovo Connect 服务页面。
 - **… → 登录时显示图标**：设置菜单栏应用是否随登录启动。
+- **… → 关于与开源许可证**：查看版本、许可证、第三方声明和对应源码。
 
 日常启用、停用和重新连接无需重复输入管理员密码。退出菜单栏应用只关闭界面；需要停止 LTE 服务时，请先关闭 **启用 LTE**。
 
@@ -71,7 +72,15 @@ LTE 联网会消耗 SIM 卡流量，软件显示的流量统计仅供参考，�
 sudo /usr/bin/python3 '/Library/Application Support/MagicBayLTE/uninstall.py'
 ```
 
-卸载后保留本地日志和对应源码。
+卸载会将 LTE 重置为停用并清理运行状态，保留本地日志和对应源码。重新安装后默认停用；正常升级则保留已保存的启用选择。配置文件丢失时保持停用。
+
+如需卸载时同时删除日志，在上述命令末尾添加 `--remove-logs`。
+
+## 隐私与联网检查
+
+启用后，后台会根据连接状态约每 2–5 秒检查网络连通性（另有请求响应耗时），使用 AliDNS（`dns.alidns.com`）和 Cloudflare（`cloudflare-dns.com`）的 HTTPS DNS 服务固定查询 `example.com`。这些健康检查不包含浏览历史；服务提供方可见检测请求的来源 IP，检测经 LTE 发送时会消耗少量流量。
+
+日志和本地运行状态可能包含运营商、IP 地址和连接诊断信息，仅管理员及当前登录的控制台用户可读取。软件不主动上传日志；分享诊断文件前请自行检查内容。信号检测通过本地 USB 读取。
 
 ## 开发文档
 

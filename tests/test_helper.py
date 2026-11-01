@@ -87,6 +87,9 @@ class HelperProtocol(unittest.TestCase):
         helper.PREFERENCE.write_text(json.dumps({'enabled':'false'}))
         with self.assertRaises(ValueError): helper.read_preference()
 
+    def test_missing_preference_defaults_to_disabled(self):
+        self.assertFalse(helper.read_preference())
+
     def test_real_peer_credentials(self):
         import os
         left,right=socket.socketpair()

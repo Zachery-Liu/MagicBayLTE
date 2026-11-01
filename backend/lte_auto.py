@@ -23,6 +23,7 @@ import stat
 import threading
 from failover_policy import Policy
 from network_events import NetworkEvents
+from local_access import private_output, write_json
 
 BASE = Path(__file__).resolve().parent
 ENGINE = BASE/'magicbay_lte_managed'
@@ -45,10 +46,7 @@ def log(message):
 
 def write_state(state):
     state['updated_utc'] = datetime.now(timezone.utc).isoformat()
-    pending = STATE.with_suffix('.new')
-    pending.write_text(json.dumps(state, ensure_ascii=False, indent=2))
-    pending.chmod(0o644)
-    pending.replace(STATE)
+    write_json(STATE, state)
 
 
 def birth(pid):
@@ -260,14 +258,14 @@ class Engine:
     def start(self, monitor=False):
         reader, self.writer = os.pipe()
         directory = BASE/'logs'
-        directory.mkdir(exist_ok=True)
+        directory.mkdir(mode=0o700, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
         self.log_path = directory/('managed-'+stamp+'.log')
         environment=dict(os.environ)
         environment.pop('MAGICBAY_MONITOR_ONLY',None)
         if monitor: environment['MAGICBAY_MONITOR_ONLY']='1'
         try:
-            with self.log_path.open('w') as output:
+            with private_output(self.log_path) as output:
                 self.process = subprocess.Popen([str(ENGINE)], stdout=output, stderr=subprocess.STDOUT,
                     pass_fds=(reader,), start_new_session=True,
                     env=dict(environment, MAGICBAY_CONTROL_FD=str(reader), MAGICBAY_DURATION='0',
@@ -602,9 +600,10 @@ def run(observe=False, duration=0, exercise=False):
             state['physical_interfaces_before'] = initial_physical
             state['physical_interfaces_after'] = physical_interfaces()
             directory = BASE/'logs'
-            directory.mkdir(exist_ok=True)
+            directory.mkdir(mode=0o700, exist_ok=True)
             stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
-            (directory/('auto-test-'+stamp+'.json')).write_text(json.dumps(state,ensure_ascii=False,indent=2))
+            with private_output(directory/('auto-test-'+stamp+'.json')) as output:
+                json.dump(state, output, ensure_ascii=False, indent=2)
         write_state(state)
     return 0 if state.get('completed') and cleaned else 1
 
@@ -633,6 +632,7 @@ def main(argv=None):
         return 0
     if os.geteuid()!=0:
         parser.error('此操作需要 macOS 管理员权限。')
+    os.umask(0o077)
     if args.action=='stop':
         state = alive()
         if not state:
@@ -661,9 +661,9 @@ def main(argv=None):
             print('自动备用 LTE 已运行。')
             return 0
         directory=BASE/'logs'
-        directory.mkdir(exist_ok=True)
+        directory.mkdir(mode=0o700, exist_ok=True)
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
-        with (directory/('auto-'+stamp+'.log')).open('w') as output:
+        with private_output(directory/('auto-'+stamp+'.log')) as output:
             process=subprocess.Popen([sys.executable,str(BASE/'lte_auto.py'),'run']+
                 (['--observe'] if args.observe else []),stdout=output,stderr=subprocess.STDOUT,start_new_session=True)
         deadline=time.monotonic()+50

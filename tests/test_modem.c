@@ -114,6 +114,7 @@ int main(void)
     assert(mb_modem.values.packet_state==2 && mb_modem.values.data_class==32);
     assert(!strcmp(mb_modem.values.provider_name,"CHN-UNICOM") && mb_modem.signal_at[0]);
     FILE *f=fopen(path,"r");assert(f);char json[2048]={0};assert(fread(json,1,sizeof(json)-1,f)>0);fclose(f);
+    struct stat metadata;assert(stat(path,&metadata)==0 && (metadata.st_mode&0777)==0600);
     assert(strstr(json,"\"provider_name\":\"CHN-UNICOM\"") && strstr(json,"\"rssi\":27"));
     /* A removed device must terminate the stale handle on every USB path. */
     for (failure_stage=1;failure_stage<=3;failure_stage++) {
