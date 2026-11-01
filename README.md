@@ -6,6 +6,24 @@
 
 没有绑定某一台电脑、模块序列号或 SIM 身份。`17ef:7240` 是该型号共同的 USB VID/PID，接口布局也针对该型号适配；其他 Intel 机器配同型号模块可尝试复用，其他型号需要另行适配。
 
+## 免责声明 | Disclaimer
+
+### 中文
+
+本项目是由社区独立开发和维护的非官方开源项目，旨在为 Lenovo Magic Bay LTE 设备提供 macOS 平台下的兼容性支持。
+
+本项目与联想（Lenovo）及苹果（Apple）不存在任何隶属、合作、赞助或官方认可关系，亦非上述公司的官方产品或驱动程序。
+
+Lenovo、Magic Bay、Apple 及 macOS 等名称和商标归其各自权利人所有。本项目提及上述名称仅用于说明设备兼容性及运行平台，不代表任何官方授权、认可或关联关系。
+
+### English
+
+This is an independent, community-developed and maintained, unofficial open-source project intended to provide macOS compatibility support for Lenovo Magic Bay LTE devices.
+
+This project is not affiliated with, endorsed by, or sponsored by Lenovo or Apple, and is not an official product or driver of either company.
+
+Lenovo, Magic Bay, Apple, and macOS are trademarks of their respective owners. References to these names are used solely to identify compatible hardware and the target operating system, and do not imply any official authorization, endorsement, or affiliation.
+
 ## 功能
 
 - 原生菜单栏蜂窝信号图标，未就绪时显示斜杠。
