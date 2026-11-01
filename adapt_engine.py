@@ -189,6 +189,33 @@ replace('mb_close_session: ;', '''mb_close_session: ;
     mbm_export(0);
 #endif''')
 
+# A monitoring session needs IF0 only. Do not fail module registration on an
+# unnecessary IF1 alternate-setting/NTB transaction while firmware is booting.
+replace('    int r;\n\n    if (libusb_init(&ctx)', '''    int r;
+    int data_claimed=0,control_only=0;
+#ifdef MAGICBAY_MANAGED
+    control_only=getenv("MAGICBAY_MONITOR_ONLY")!=NULL;
+#endif
+
+    if (libusb_init(&ctx)''')
+a=s.index('    r = libusb_claim_interface(h, IF_DATA);')
+b=s.index('    /* OPEN TID 500 */',a)
+data_setup=s[a:b]
+assert data_setup.count('    if (r != 0) goto rel12;')==1
+data_setup=data_setup.replace('    if (r != 0) goto rel12;',
+    '    if (r != 0) goto rel12;\n    data_claimed=1;')
+s=s[:a]+'''    if (control_only) {
+        mb_log("control-only initialization: IF0 only; IF1 and NTB untouched");
+    } else {
+'''+data_setup+'    }\n\n'+s[b:]
+replace('''cleanup:
+    libusb_set_interface_alt_setting(h, IF_DATA, 0);
+    libusb_release_interface(h, IF_DATA);''','''cleanup:
+    if (data_claimed) {
+        libusb_set_interface_alt_setting(h, IF_DATA, 0);
+        libusb_release_interface(h, IF_DATA);
+    }''')
+
 header = '// Adapted for Lenovo Magic Bay LTE 17ef:7240; upstream MIT license in LICENSE-cellular.txt.\n'
 (base/'magicbay_lte.c').write_text(header+s)
 shutil.copyfile(base/'reference-cellular/LICENSE',base/'LICENSE-cellular.txt')

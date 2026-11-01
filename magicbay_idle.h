@@ -36,6 +36,9 @@ static int mb_idle_monitor(libusb_device_handle *h)
         if (n==0) return 0;
         if (n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR) return -1;
         mb_modem_tick(h);
+        if (mbm_monitor_stalled()) {
+            mb_log("control session unresponsive for 75 seconds; reopen without USB reset");return -1;
+        }
         if (mb_modem.values.activation_state>0 && mb_modem.values.activation_state!=3) {
             mb_log("data session unexpectedly active in control-only standby; closing session");return -1;
         }

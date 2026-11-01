@@ -23,6 +23,7 @@ struct ServiceState: Decodable {
     var retryCount: Int?
     var transferReceivedTotal: UInt64?
     var transferSentTotal: UInt64?
+    var reconnectCount: Int?
 }
 struct HelperState: Decodable {
     var pid: Int32
@@ -50,7 +51,7 @@ struct ModemState: Decodable {
     var activationUpdatedUtc: String
 }
 enum ConnectionMode: String {
-    case ready, returning, standby, active, preparing, closing, disabled, warning
+    case ready, returning, standby, active, preparing, reconnecting, waiting, closing, disabled, warning
     var title: String {
         switch self {
         case .ready: return "LTE 已就绪"
@@ -58,6 +59,8 @@ enum ConnectionMode: String {
         case .standby: return "LTE 数据连接待确认"
         case .active: return "正在使用 LTE"
         case .preparing: return "正在连接 LTE"
+        case .reconnecting: return "正在重新连接 LTE"
+        case .waiting: return "等待接入模块"
         case .closing: return "正在关闭 LTE"
         case .disabled: return "LTE 未启用"
         case .warning: return "连接需要检查"
@@ -68,6 +71,7 @@ struct Snapshot {
     var mode: ConnectionMode = .preparing
     var detail = "正在读取 LTE 状态…"
     var enabled = false
+    var reconnectCount = 0
     var modulePresent: Bool?
     var dataConnected = false
     var simState: Int?
@@ -160,6 +164,7 @@ enum SnapshotReader {
     static func interpret(_ state: ServiceState, now: Date, processAlive: Bool) -> Snapshot {
         var result=Snapshot()
         result.installed=true
+        result.reconnectCount=state.reconnectCount ?? 0
         result.updated=date(state.updatedUtc)
         result.enabled=processAlive && state.phase != "stopped" && state.phase != "cleanup_pending"
         result.received=state.transferReceivedTotal
@@ -174,6 +179,10 @@ enum SnapshotReader {
         } else if result.updated == nil || now.timeIntervalSince(result.updated!)>60 {
             result.mode = .warning;result.detail="后台状态更新超时"
             result.lteHealthy=nil
+        } else if state.phase=="reconnecting" {
+            result.mode = .reconnecting;result.detail="正在结束旧 LTE 会话，随后重新初始化"
+        } else if state.phase=="waiting_module" {
+            result.mode = .waiting;result.detail="接入 Magic Bay LTE 后将自动初始化"
         } else if state.phase=="return_check" {
             result.mode = .warning;result.detail="蜂窝数据已关闭，当前联网检查未通过"
         } else if state.phase=="returning" {
@@ -290,8 +299,8 @@ enum SnapshotReader {
             applyModem(modem,to:&result,now:Date(),enginePid:state.enginePid)
         }
         if presence==false {
-            result.mode=result.enabled ? .warning : .disabled
-            result.detail="未检测到 Magic Bay LTE 模块"
+            result.mode=result.enabled ? .waiting : .disabled
+            result.detail="等待接入 Magic Bay LTE 模块"
             result.dataConnected=false;result.simState=nil;result.providerName=nil;result.providerId=nil
             result.bars=nil;result.dbm=nil;result.signalUpdated=nil
         } else if result.dataConnected && (result.mode == .standby || result.mode == .active) {
@@ -321,6 +330,8 @@ func runModelChecks() {
     var ready=SnapshotReader.interpret(readyState,now:now,processAlive:true)
     ready.modulePresent=true;ready.simState=1;ready.registrationState=3;ready.bars=4
     precondition(ready.mode == .ready && ready.connected && !ready.dataConnected && ready.dataText=="未建立 · 待命")
+    var absent=readyState;absent.phase="waiting_module"
+    precondition(SnapshotReader.interpret(absent,now:now,processAlive:true).mode == .waiting)
     readyState.phase="returning"
     precondition(SnapshotReader.interpret(readyState,now:now,processAlive:true).mode == .returning)
     precondition(SnapshotReader.interpret(state,now:now,processAlive:false).mode == .disabled)

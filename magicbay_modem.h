@@ -15,7 +15,7 @@ static struct {
     struct timespec request_mtime;
     double last_request;
     int request_seen;
-    double last_export;
+    double last_export, started_at, last_response;
 } mb_modem={.values={.sim_state=-1,.registration_state=-1,.packet_state=-1,.activation_state=-1,.rssi=-1},.sequence=4000000};
 
 static double mbm_now(void)
@@ -67,10 +67,23 @@ static void mbm_export(unsigned cid)
     if (fclose(f)) bad=1;
     if (!bad) { chmod(temporary,0644);rename(temporary,path); }
 }
+static int mbm_disconnected(int result)
+{
+    if (result!=LIBUSB_ERROR_NO_DEVICE) return 0;
+    mb_log("modem USB disconnected; stop stale handle and await re-enumeration");
+    bridge_stop=1;
+    return 1;
+}
+static int mbm_monitor_stalled(void)
+{
+    double last=mb_modem.last_response>0 ? mb_modem.last_response : mb_modem.started_at;
+    return mb_modem.started_at>0 && mbm_now()-last>=75;
+}
 static void mb_modem_tick(libusb_device_handle *h)
 {
     if (!getenv("MAGICBAY_TELEMETRY_PATH") || bridge_stop) return;
     double now=mbm_now();
+    if (!mb_modem.started_at) mb_modem.started_at=now;
     if (now-mb_modem.last_export>=1) { mbm_export(0);mb_modem.last_export=now; }
     const char *request_path=getenv("MAGICBAY_SIGNAL_REQUEST_PATH");
     struct stat request;
@@ -92,15 +105,17 @@ static void mb_modem_tick(libusb_device_handle *h)
     int nr=LIBUSB_ERROR_TIMEOUT;
     if (mb_modem.pending_tid)
         nr=libusb_interrupt_transfer(h,EP_INT,notice,sizeof(notice),&actual,1);
+    if (mbm_disconnected(nr)) return;
     /* Firmware occasionally omits notifications. A pending query gets a bounded fallback read. */
     if (nr==0 || (mb_modem.pending_tid && now-mb_modem.sent_at>=0.1)) {
         int n=libusb_control_transfer(h,0xa1,0x01,0,IF_CTRL,response,sizeof(response),250);
+        if (mbm_disconnected(n)) return;
         if (n>=12) {
             uint32_t type=le32(response),tid=le32(response+8);
             int matched=mb_modem.pending_tid && tid==mb_modem.pending_tid;
             if (matched || type==0x80000007) {
                 unsigned cid=mbm_decode(response,(size_t)n,&mb_modem.values);
-                if (cid) mbm_export(cid);
+                if (cid) { mb_modem.last_response=now;mbm_export(cid); }
                 if (matched && (type==0x80000003 || type==0x80000004)) mb_modem.pending_tid=0;
             }
         }
@@ -120,6 +135,7 @@ static void mb_modem_tick(libusb_device_handle *h)
         memcpy(query+20,basic_uuid,16);put32(query+36,cids[i]);put32(query+40,0);
         put32(query+44,size-48); // CONNECT query's SessionId=0 and other fields stay zero.
         int sent=libusb_control_transfer(h,0x21,0,0,IF_CTRL,query,size,500);
+        if (mbm_disconnected(sent)) return;
         mb_modem.due[i]=now+30;
         if (sent==(int)size) {
             mb_modem.pending_tid=tid;mb_modem.pending_cid=cids[i];mb_modem.sent_at=now;

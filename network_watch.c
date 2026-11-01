@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /* Read-only SystemConfiguration notifications. Never changes network settings. */
 #include <SystemConfiguration/SystemConfiguration.h>
+#include <IOKit/IOKitLib.h>
 #include <dispatch/dispatch.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -10,6 +11,65 @@
 
 static int self_test;
 static CFStringRef test_key;
+static unsigned modem_count;
+
+/* Match the same compatibility service that libusb opens, not a serial number.
+ * The parent observes these events without claiming USB or issuing MBIM commands. */
+static CFMutableDictionaryRef modem_match(void)
+{
+    CFMutableDictionaryRef match=IOServiceMatching("IOUSBDevice");
+    if (!match) return NULL;
+    CFMutableDictionaryRef properties=CFDictionaryCreateMutable(NULL,0,
+        &kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);
+    int vid=0x17ef,pid=0x7240;
+    CFNumberRef vendor=CFNumberCreate(NULL,kCFNumberIntType,&vid);
+    CFNumberRef product=CFNumberCreate(NULL,kCFNumberIntType,&pid);
+    CFDictionarySetValue(properties,CFSTR("idVendor"),vendor);
+    CFDictionarySetValue(properties,CFSTR("idProduct"),product);
+    CFDictionarySetValue(match,CFSTR(kIOPropertyMatchKey),properties);
+    CFRelease(vendor);CFRelease(product);CFRelease(properties);
+    return match;
+}
+
+static void modem_changed(void *context,io_iterator_t iterator)
+{
+    int added=context!=NULL,changed=0;
+    io_service_t device;
+    while ((device=IOIteratorNext(iterator))) {
+        IOObjectRelease(device);
+        if (added) modem_count++;
+        else if (modem_count) modem_count--;
+        changed=1;
+    }
+    /* Emit even if rapid re-enumeration leaves final presence unchanged: the
+     * old libusb handle is still invalid and the supervisor must replace it. */
+    if (changed) puts(modem_count ? "MODEM_PRESENT" : "MODEM_ABSENT");
+}
+
+static void watch_modem(void)
+{
+    IONotificationPortRef port=IONotificationPortCreate(kIOMainPortDefault);
+    if (!port) return;
+    IONotificationPortSetDispatchQueue(port,dispatch_get_main_queue());
+    io_iterator_t removed=IO_OBJECT_NULL,added=IO_OBJECT_NULL;
+    CFMutableDictionaryRef match=modem_match();
+    if (!match || IOServiceAddMatchingNotification(port,kIOTerminatedNotification,
+            match,modem_changed,NULL,&removed)!=KERN_SUCCESS) goto failed;
+    /* Initial termination enumeration is only priming, never a removal. */
+    io_service_t device;
+    while ((device=IOIteratorNext(removed))) IOObjectRelease(device);
+    match=modem_match();
+    if (!match || IOServiceAddMatchingNotification(port,kIOFirstMatchNotification,
+            match,modem_changed,(void *)1,&added)!=KERN_SUCCESS) goto failed;
+    modem_changed((void *)1,added);
+    if (!modem_count) puts("MODEM_ABSENT");
+    return; /* Port and iterators live until this parent-owned process exits. */
+failed:
+    if (removed) IOObjectRelease(removed);
+    if (added) IOObjectRelease(added);
+    IONotificationPortDestroy(port);
+    puts("MODEM_OBSERVER_UNAVAILABLE");
+}
 
 static void changed(SCDynamicStoreRef store, CFArrayRef keys, void *context)
 {
@@ -58,6 +118,7 @@ int main(int argc,char **argv)
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{exit(4);});
     } else {
+        watch_modem();
         /* Parent owns the write end. EOF guarantees observer exits with supervisor. */
         if (fcntl(STDIN_FILENO,F_SETFL,O_NONBLOCK)<0) return 1;
         dispatch_source_t parent=dispatch_source_create(DISPATCH_SOURCE_TYPE_READ,STDIN_FILENO,0,dispatch_get_main_queue());

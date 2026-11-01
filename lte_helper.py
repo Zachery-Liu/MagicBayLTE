@@ -52,7 +52,7 @@ def read_preference():
     return data['enabled']
 
 
-def accept_command(connection, enabled):
+def accept_command(connection, enabled, reconnect=None):
     """Acknowledge only after the administrator-owned preference is committed."""
     connection.settimeout(0.25)
     uid = peer_uid(connection)
@@ -65,6 +65,13 @@ def accept_command(connection, enabled):
         if not part:
             break
         data += part
+    if data==b'R\n':
+        if not enabled or reconnect is None:
+            connection.sendall(b'UNAVAILABLE\n')
+            return enabled
+        reconnect()  # Fixed action on our verified supervisor; never a shell/path.
+        connection.sendall(b'OK\n')
+        return enabled
     if data not in (b'E\n', b'D\n'):
         connection.sendall(b'INVALID\n')
         return enabled
@@ -88,6 +95,13 @@ def request(enabled):
 def stop_signal(signum, frame):
     global STOP
     STOP = True
+
+
+def reconnect_worker():
+    live=auto.alive()
+    if not live:
+        raise OSError('LTE supervisor is not ready for reconnect')
+    os.kill(live['pid'],signal.SIGUSR2)
 
 
 def run():
@@ -154,7 +168,7 @@ def run():
                         continue
                     with connection:
                         try:
-                            desired = accept_command(connection, enabled)
+                            desired = accept_command(connection, enabled, reconnect_worker)
                             if desired != enabled:
                                 enabled_at = datetime.now(timezone.utc).isoformat()
                                 retry_at = 0

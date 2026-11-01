@@ -1,12 +1,12 @@
 # 公开仓库与发行
 
-计划仓库：`https://github.com/Zachery-Liu/MagicBayLTE`。本地整理、构建并不等于已经上传；确认发布前请核对当前目录和 `dist/` 产物。
+仓库：`https://github.com/Zachery-Liu/MagicBayLTE`，当前阶段保持 **Private**，Release 附件也遵循仓库访问权限。以后决定开放时再单独修改可见性，不因创建 Release 而公开仓库。
 
 ## 首次发布
 
 1. 在自己的 GitHub 账号创建公开仓库 `MagicBayLTE`。不要另外生成 README / LICENSE，以免与本地初始提交冲突。
 2. 上传这份独立项目目录的 Git 历史，不要上传上层个人工作目录。默认分支使用 `main`。
-3. 在 Releases 创建 `v1.4.0`，先保存为 Draft / Pre-release。附上 `dist/MagicBayLTE-1.4.0-macOS-Intel.pkg`、`dist/MagicBayLTE-1.4.0-source.tar.gz`、`dist/SHA256SUMS.txt`，正文可用 `docs/RELEASE_NOTES_1.4.0.md`。
+3. 在 Releases 创建 `v1.4.2`，先保存为 Draft / Pre-release。附上 `dist/MagicBayLTE-1.4.2-macOS-Intel.pkg`、`dist/MagicBayLTE-1.4.2-source.tar.gz`、`dist/SHA256SUMS.txt`，正文可用 `docs/RELEASE_NOTES_1.4.2.md`。
 4. 在独立测试机器或测试启动卷验证全新安装、默认关闭、启用、关闭、退出界面、重新打开、更新和卸载。任何真实 LTE 出口切换都应先安排测试窗口，不能在构建时自动断网。
 5. 检查无私人日志、状态、地址、凭据或抓包后，再公开 Release。早期硬件适配建议保留 Pre-release 标记，并收集相同 USB ID / 不同机器的反馈。
 

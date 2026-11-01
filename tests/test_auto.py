@@ -234,6 +234,72 @@ class Supervisor(unittest.TestCase):
         ready=next(s for s in snapshots if s['phase']=='ready')
         self.assertTrue(ready['return_verified']);self.assertNotIn('interface',ready)
 
+    def simulate_hotplug(self,observations,fail_first=False,reconnect_at=None):
+        calls=[];snapshots=[];clock=[0.0];round_number=[0];attempts=[0]
+        class FakeEngine:
+            def __init__(self):
+                self.process=None;self.info=None;self.active=False
+                self.log_path=auto.BASE/'fake-engine.log'
+            @property
+            def monitoring(self):return bool(self.info and self.info.get('mode')=='monitor')
+            @property
+            def data_ready(self):return False
+            def start(self,monitor=False):
+                attempts[0]+=1;calls.append(('start',clock[0],monitor))
+                if fail_first and attempts[0]==1:raise RuntimeError('simulated not-yet-enumerated USB')
+                self.process=Mock(pid=777);self.process.poll.return_value=None
+                self.info={'mode':'monitor','activation_state':3}
+            def close(self):
+                if self.process:calls.append(('close',clock[0],self.monitoring))
+                self.process=None;self.info=None;self.active=False;return True
+            def switch(self,*args):raise AssertionError('USB events must not select LTE as system exit')
+        events=Mock()
+        events.snapshot.side_effect=lambda:{'available':True,'module_present':observations[min(round_number[0],len(observations)-1)][0],
+            'module_sequence':observations[min(round_number[0],len(observations)-1)][1]}
+        def wait(_events,delay):
+            round_number[0]+=1;clock[0]+=max(.1,delay)
+            if round_number[0]==reconnect_at:auto.RECONNECT=True
+            if round_number[0]>=len(observations):auto.STOP=True
+        with contextlib.ExitStack() as stack:
+            for name,value in [('Engine',FakeEngine),('NetworkEvents',lambda *a:events),
+                ('birth',lambda p:'birth'),('orphan_engine',lambda:None),
+                ('default_route',lambda:{'interface':'en2'}),('system_proxy',lambda:{}),
+                ('physical_interfaces',lambda:['en2']),('health',lambda _:True),
+                ('proxy_compatibility',lambda *a:{'compatible':True}),
+                ('wait_for_observation',wait),('write_state',lambda s:snapshots.append(dict(s)))]:
+                stack.enter_context(patch.object(auto,name,value))
+            stack.enter_context(patch.object(auto,'STOP',False))
+            stack.enter_context(patch.object(auto.time,'monotonic',lambda:clock[0]))
+            stack.enter_context(patch.object(auto.signal,'signal'))
+            auto.run()
+        return calls,snapshots
+
+    def test_manual_reconnect_closes_old_session_before_starting_another(self):
+        calls,states=self.simulate_hotplug([(True,1)]*4,reconnect_at=2)
+        starts=[c for c in calls if c[0]=='start']
+        self.assertEqual(len(starts),2)
+        old_close=next(c for c in calls if c[0]=='close')
+        self.assertLess(calls.index(old_close),calls.index(starts[1]))
+        self.assertIn('reconnecting',[s['phase'] for s in states])
+        self.assertTrue(any(s['phase']=='ready' and s['reconnect_count']==1 for s in states))
+
+    def test_missing_module_waits_without_repeated_usb_claims(self):
+        calls,states=self.simulate_hotplug([(False,1)]*3)
+        self.assertEqual(calls,[])
+        self.assertIn('waiting_module',[s['phase'] for s in states])
+
+    def test_attach_bypasses_existing_retry_and_reenumeration_replaces_live_handle(self):
+        calls,states=self.simulate_hotplug([(None,0),(True,1),(True,1),(True,3),(True,3)],fail_first=True)
+        starts=[c for c in calls if c[0]=='start']
+        # The plug event cancels failure backoff; a new enumeration (same final
+        # presence) closes the old handle before obtaining another one.
+        self.assertEqual(len(starts),3)
+        self.assertTrue(all(c[2] for c in starts))
+        self.assertLess(starts[1][1]-starts[0][1],4)
+        close=next(c for c in calls if c[0]=='close')
+        self.assertLess(calls.index(close),calls.index(starts[2]))
+        self.assertTrue(any(s['phase']=='ready' and 'connection_error' not in s for s in states))
+
     def test_unknown_tun_is_rejected(self):
         response=subprocess.CompletedProcess([],0,'default 1.2.3.4 utun4','')
         with patch.object(auto,'command',return_value=response), \

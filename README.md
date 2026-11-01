@@ -11,6 +11,7 @@
 - 原生菜单栏蜂窝信号图标，未就绪时显示斜杠。
 - 模块、SIM、运营商、LTE 注册、数据连接、信号强度及本次传输量。
 - 信号约 30 秒刷新一次，也可手动检测。
+- 支持热插拔自动恢复；“…”菜单的“重新连接 LTE”可主动结束旧 LTE 会话并重新初始化，不关闭 Wi-Fi 或修改代理。
 - Wi-Fi / 有线网络不可用后启用 LTE；物理网络恢复且验证通过后结束 LTE 数据会话。
 - 平时只查询模块状态，不建立 LTE 数据会话；返回 Wi-Fi 后关闭旧 LTE 接口，避免旧连接继续消耗 LTE 流量。
 - 首次安装需要管理员授权，日常启用 / 关闭通过受限本地助手完成，无需重复密码。
@@ -18,7 +19,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/Zachery-Liu/MagicBayLTE/releases) 下载 `MagicBayLTE-1.4.0-macOS-Intel.pkg` 和对应的 `SHA256SUMS.txt`。
+从 [Releases](https://github.com/Zachery-Liu/MagicBayLTE/releases) 下载 `MagicBayLTE-1.4.2-macOS-Intel.pkg` 和对应的 `SHA256SUMS.txt`。
 
 1. 确认是 Intel Mac，模块 USB ID 为 `17ef:7240`，SIM 已开通流量。
 2. 当前版本的后台依赖 Apple 命令行工具提供的 `/usr/bin/python3`（Python 3.9+）。未安装时运行 `xcode-select --install` 并完成安装。

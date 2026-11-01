@@ -15,6 +15,8 @@ class NetworkEvents:
         self.process=None
         self.thread=None
         self.closing=False
+        self.module_present=None
+        self.module_sequence=0
         try:
             self.process=subprocess.Popen([str(executable)],stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,bufsize=1,close_fds=True)
@@ -30,6 +32,10 @@ class NetworkEvents:
                     self.ready=True
                 elif line.strip()=='NETWORK_CHANGE':
                     self.notify()
+                elif line.strip() in ('MODEM_PRESENT','MODEM_ABSENT'):
+                    self.notify_module(line.strip()=='MODEM_PRESENT')
+                elif line.strip()=='MODEM_OBSERVER_UNAVAILABLE':
+                    with self.condition: self.module_present=None
         except (OSError,ValueError) as error:
             if not self.closing: self.error=str(error)
         finally:
@@ -39,6 +45,14 @@ class NetworkEvents:
 
     def notify(self):
         with self.condition:
+            self.sequence+=1
+            self.last_utc=datetime.now(timezone.utc).isoformat()
+            self.condition.notify_all()
+
+    def notify_module(self,present):
+        with self.condition:
+            self.module_present=present
+            self.module_sequence+=1
             self.sequence+=1
             self.last_utc=datetime.now(timezone.utc).isoformat()
             self.condition.notify_all()
@@ -53,7 +67,9 @@ class NetworkEvents:
     def snapshot(self):
         with self.condition:
             return {'available':self.ready,'event_count':self.sequence,
-                    'last_event_utc':self.last_utc,'error':self.error}
+                    'last_event_utc':self.last_utc,'error':self.error,
+                    'module_present':self.module_present if self.ready else None,
+                    'module_sequence':self.module_sequence}
 
     def close(self):
         self.closing=True

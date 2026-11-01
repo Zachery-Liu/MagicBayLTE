@@ -16,6 +16,7 @@ import ServiceManagement
     private var previous: (key: String, rx: UInt64, tx: UInt64, time: Double)?
     private var timer: Timer?
     private var signalRequestedAt: Date?
+    private var pendingReconnect: (count: Int, started: Date)?
 
     func begin() {
         refresh()
@@ -42,6 +43,17 @@ import ServiceManagement
                     }
                     self.previous = (key, rx, tx, now)
                 } else { self.previous = nil }
+                if let pending=self.pendingReconnect {
+                    if result.reconnectCount>pending.count && result.mode != .reconnecting {
+                        self.pendingReconnect=nil;self.busy=false
+                    } else if Date().timeIntervalSince(pending.started)>60 {
+                        self.pendingReconnect=nil;self.busy=false
+                        self.notice="重新连接尚未完成，请查看 LTE 状态或日志。"
+                    } else {
+                        result.mode = .reconnecting;result.detail="正在结束旧 LTE 会话并重新初始化"
+                        result.dataConnected=false
+                    }
+                }
                 self.snapshot = result
                 if let pending=self.pendingSince {
                     if result.enabled==self.desiredEnabled {
@@ -102,6 +114,20 @@ import ServiceManagement
     func setLogin(_ enabled: Bool) {
         do { try LoginItem.setEnabled(enabled); loginEnabled = enabled }
         catch { notice = "登录启动设置未保存：\(error.localizedDescription)" }
+    }
+    func reconnect() {
+        guard !busy, snapshot.installed, snapshot.enabled else { return }
+        let count=snapshot.reconnectCount
+        busy=true;notice=nil
+        DispatchQueue.global(qos:.userInitiated).async { [weak self] in
+            let accepted=mb_reconnect()==0
+            DispatchQueue.main.async {
+                guard let self=self else { return }
+                if accepted { self.pendingReconnect=(count,Date()) }
+                else { self.busy=false;self.notice="后台尚未接受重新连接，请稍后再试。" }
+                self.refresh()
+            }
+        }
     }
     func openLogs() {
         NSWorkspace.shared.open(SnapshotReader.root.appendingPathComponent("logs", isDirectory: true))

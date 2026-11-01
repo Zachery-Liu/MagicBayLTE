@@ -52,6 +52,20 @@ class Notifications(unittest.TestCase):
             self.assertTrue(p.step(now,None,True)[0])
         events.close()
 
+    def test_hotplug_generation_preserves_rapid_remove_and_reinsert(self):
+        events=self.make_unavailable();events.ready=True
+        events.notify_module(True);generation=events.snapshot()['module_sequence']
+        events.notify_module(False);events.notify_module(True)
+        state=events.snapshot()
+        self.assertTrue(state['module_present'])
+        self.assertEqual(state['module_sequence'],generation+2)
+        self.assertTrue(events.wait(0));events.close()
+
+    def test_dead_observer_does_not_block_periodic_usb_discovery(self):
+        events=self.make_unavailable();events.notify_module(False)
+        self.assertIsNone(events.snapshot()['module_present'])
+        events.close()
+
 
 class HealthRace(unittest.TestCase):
     def test_success_cancels_the_other_running_probe(self):

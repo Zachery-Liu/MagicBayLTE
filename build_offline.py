@@ -54,7 +54,7 @@ def main():
         transcript+=run([str(idle)])
         watcher=temporary/'magicbay_network_watch'
         run(['clang', '-target', 'x86_64-apple-macosx13.0','-O2','-Wall','-Wextra','-Werror','-fblocks','network_watch.c',
-             '-framework','CoreFoundation','-framework','SystemConfiguration','-o',str(watcher)])
+             '-framework','CoreFoundation','-framework','SystemConfiguration','-framework','IOKit','-o',str(watcher)])
         common = ['clang', '-target', 'x86_64-apple-macosx13.0', '-O2', '-Wall', '-Wextra', '-Werror', '-I', 'libusb-1.0.29/libusb',
                   'magicbay_lte.c', 'libusb-1.0.29/libusb/.libs/libusb-1.0.a', '-lpthread',
                   '-framework', 'IOKit', '-framework', 'CoreFoundation', '-framework', 'Security',

@@ -6,6 +6,7 @@ import json
 import subprocess
 import tarfile
 import tempfile
+from package_release import VERSION
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -20,7 +21,7 @@ def main():
         expected, name = line.split('  ', 1)
         assert Path(name).name == name
         assert sha(out / name) == expected, 'Release checksum mismatch: ' + name
-    package = out / 'MagicBayLTE-1.4.0-macOS-Intel.pkg'
+    package = out / ('MagicBayLTE-'+VERSION+'-macOS-Intel.pkg')
     with tempfile.TemporaryDirectory(prefix='magicbay-inspect-') as directory:
         work = Path(directory)
         subprocess.run(['/usr/sbin/pkgutil', '--expand-full', str(package), str(work / 'expanded')], check=True)
@@ -35,7 +36,7 @@ def main():
         runtime = json.loads((target / 'installed-build.json').read_text())
         for name, expected in runtime['sha256'].items():
             assert sha(target / name) == expected, 'Payload hash mismatch: ' + name
-        source = target / 'Source/MagicBayLTE-1.4.0-source.tar.gz'
+        source = target / ('Source/MagicBayLTE-'+VERSION+'-source.tar.gz')
         assert sha(source) == sha(out / source.name), 'Embedded source differs'
         with tarfile.open(source) as tar:
             names = tar.getnames()

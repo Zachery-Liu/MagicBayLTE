@@ -12,9 +12,10 @@
 #include <unistd.h>
 #include <string.h>
 
-/* Two fixed requests to the root-owned helper. No shell or password handling. */
-int mb_set_enabled(int enabled)
+/* Three fixed requests to the root-owned helper. No shell or password handling. */
+static int mb_helper_command(char command)
 {
+    if (command!='E' && command!='D' && command!='R') return -1;
     int fd=socket(AF_UNIX,SOCK_STREAM,0);
     if (fd<0) return -1;
     struct timeval timeout={3,0};
@@ -30,7 +31,7 @@ int mb_set_enabled(int enabled)
     int result=-1;
     if (!connect(fd,(struct sockaddr *)&address,sizeof(address)) &&
         !getpeereid(fd,&uid,&gid) && uid==0) {
-        const char *request=enabled ? "E\n" : "D\n";
+        const char request[2]={command,'\n'};
         if (write(fd,request,2)==2) {
             char reply[4]={0};size_t received=0;
             while (received<3) {
@@ -44,6 +45,9 @@ int mb_set_enabled(int enabled)
     close(fd);
     return result;
 }
+
+int mb_set_enabled(int enabled) { return mb_helper_command(enabled ? 'E' : 'D'); }
+int mb_reconnect(void) { return mb_helper_command('R'); }
 
 /* Read-only 64-bit interface counters; no USB access, packets or route writes. */
 int mb_interface_counters(const char *name, uint64_t *received, uint64_t *sent)

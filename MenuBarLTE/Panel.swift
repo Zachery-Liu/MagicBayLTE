@@ -67,6 +67,9 @@ struct LTEPanel: View {
                 Button { model.refresh() } label: { Image(systemName:"arrow.clockwise").frame(width:28,height:28) }
                     .buttonStyle(.plain).help("刷新 LTE 状态")
                 Menu {
+                    Button("重新连接 LTE") { model.reconnect() }
+                        .disabled(model.busy || !model.snapshot.enabled)
+                    Divider()
                     Link("运营商服务 · Lenovo Connect", destination: URL(string:"https://aoac.lenovoconnect.com/")!)
                     Divider()
                     Button("打开 LTE 日志") { model.openLogs() }

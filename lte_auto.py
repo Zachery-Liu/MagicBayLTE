@@ -30,6 +30,7 @@ STATE = BASE/'auto-state.json'
 # Shared by the installed service, workspace controller and diagnostic runner.
 LOCK = Path('/var/run/magicbay-lte.lock')
 STOP = False
+RECONNECT = False
 ENDPOINTS = [('dns.alidns.com', '223.5.5.5', '/resolve?name=example.com&type=A'),
              ('cloudflare-dns.com', '1.1.1.1', '/dns-query?name=example.com&type=A')]
 
@@ -194,7 +195,7 @@ def health(interface):
 
 def wait_for_observation(events, interval):
     deadline=time.monotonic()+interval
-    while not STOP:
+    while not STOP and not RECONNECT:
         remaining=deadline-time.monotonic()
         if remaining<=0 or events.wait(min(0.5,remaining)):
             return
@@ -378,6 +379,11 @@ def signal_stop(signum, frame):
     STOP = True
 
 
+def signal_reconnect(signum,frame):
+    global RECONNECT
+    RECONNECT=True
+
+
 class SignalRequest:
     """User may touch one protected inode to request a read-only RSSI query.
 
@@ -403,15 +409,17 @@ class SignalRequest:
 
 
 def run(observe=False, duration=0, exercise=False):
-    global STOP
-    STOP = False
+    global STOP,RECONNECT
+    STOP = RECONNECT = False
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGUSR1):
         signal.signal(sig, signal_stop)
+    signal.signal(signal.SIGUSR2,signal_reconnect)
     if orphan_engine():
         raise RuntimeError('Previous LTE engine is still releasing its session; no new USB claim')
     state = {'pid': os.getpid(), 'birth': birth(os.getpid()), 'phase': 'starting',
              'active': False, 'observe_only': observe, 'exercise': exercise,
-             'connection_started_utc': datetime.now(timezone.utc).isoformat(), 'retry_count': 0}
+             'connection_started_utc': datetime.now(timezone.utc).isoformat(), 'retry_count': 0,
+             'reconnect_count':0}
     policy = Policy()
     engine = Engine()
     traffic = TrafficTotals()
@@ -419,6 +427,7 @@ def run(observe=False, duration=0, exercise=False):
     started = time.monotonic()
     retry_at = 0
     failures = 0
+    module_sequence=0
     lte_good, last_lte_probe = False, -1e9
     original_route, original_proxy = default_route(), system_proxy()
     initial_physical = physical_interfaces()
@@ -431,6 +440,37 @@ def run(observe=False, duration=0, exercise=False):
         while not STOP and (not duration or time.monotonic()-started<duration):
             request.refresh_owner()
             now = time.monotonic()
+            if RECONNECT:
+                RECONNECT=False
+                state.update(phase='reconnecting',active=engine.active)
+                write_state(state)
+                traffic.sample(engine)
+                if not engine.close():
+                    raise RuntimeError('LTE session still closing; reconnect deferred to prevent overlap')
+                traffic.sample(engine)
+                engine=Engine();policy=Policy();lte_good=None;return_pending=False
+                failures=0;retry_at=now
+                for key in ('interface','engine_pid','engine_birth','engine_log','engine_mode','connection_error'):
+                    state.pop(key,None)
+                state.update(active=False,reconnect_count=state['reconnect_count']+1,
+                    connection_started_utc=datetime.now(timezone.utc).isoformat())
+                log('Manual reconnect: LTE session closed; initialize a fresh control session')
+            hardware=events.snapshot()
+            sequence=hardware.get('module_sequence',0)
+            present=hardware.get('module_present')
+            if type(sequence) is int and sequence!=module_sequence:
+                module_sequence=sequence
+                traffic.sample(engine)
+                if not engine.close():
+                    raise RuntimeError('Previous USB handle still closing; refusing overlapping sessions')
+                traffic.sample(engine)
+                engine=Engine();policy.active=False;lte_good=None
+                for key in ('interface','engine_pid','engine_birth','engine_log','engine_mode','connection_error'):
+                    state.pop(key,None)
+                failures=0
+                retry_at=now+(1 if present is True else 0)
+                state['connection_started_utc']=datetime.now(timezone.utc).isoformat()
+                log('USB module '+('attached; immediate fresh initialization' if present else 'removed; await attachment'))
             if engine.process and engine.process.poll() is not None:
                 log('LTE engine exited; network state released')
                 traffic.sample(engine)
@@ -440,8 +480,8 @@ def run(observe=False, duration=0, exercise=False):
                 lte_good = False
                 failures += 1
                 state['connection_started_utc'] = datetime.now(timezone.utc).isoformat()
-                retry_at = now+min(300, 5*2**min(failures, 6))
-            if engine.process is None and now>=retry_at:
+                retry_at = now+min(30, 2**min(failures, 5))
+            if engine.process is None and present is not False and now>=retry_at:
                 try:
                     state.update(phase='starting', retry_count=failures)
                     write_state(state)
@@ -449,6 +489,7 @@ def run(observe=False, duration=0, exercise=False):
                     failures = 0
                     last_lte_probe = -1e9
                     record_engine(state,engine)
+                    state.pop('connection_error',None)
                     log('LTE '+('control-only standby; data session inactive' if engine.monitoring else 'data interface ready'))
                 except Exception as error:
                     log(str(error))
@@ -457,7 +498,7 @@ def run(observe=False, duration=0, exercise=False):
                         raise RuntimeError('Previous LTE process has not stopped; refusing another USB session')
                     engine = Engine()
                     failures += 1
-                    retry_at = time.monotonic()+min(300,5*2**min(failures,6))
+                    retry_at = time.monotonic()+min(30,2**min(failures,5))
             try:
                 interfaces = physical_interfaces()
                 with ThreadPoolExecutor(max_workers=max(1,len(interfaces))) as pool:
@@ -528,7 +569,7 @@ def run(observe=False, duration=0, exercise=False):
                 if not application_ok:
                     raise RuntimeError('Self-test application request through current proxy failed')
                 exercise_phases.add(phase)
-            state.update(retry_count=failures, phase=('LTE' if engine.active else 'return_check' if return_pending else 'ready' if engine.monitoring else 'standby' if engine.data_ready else 'retrying'),
+            state.update(retry_count=failures, phase=('waiting_module' if present is False else 'LTE' if engine.active else 'return_check' if return_pending else 'ready' if engine.monitoring else 'standby' if engine.data_ready else 'retrying'),
                          active=engine.active, physical_interface=best, physical_health=results,
                          lte_health=lte_good, proxy=compatibility, route=actual_route,
                          failed_observations=policy.failed, recovered_observations=policy.recovered,
@@ -538,7 +579,10 @@ def run(observe=False, duration=0, exercise=False):
             traffic.sample(engine);traffic.publish(state)
             write_state(state)
             # Recovery is sampled faster; physical interface events interrupt either wait.
-            wait_for_observation(events,2 if policy.active else 5)
+            delay=2 if policy.active else 5
+            if engine.process is None and present is not False:
+                delay=min(delay,max(0.1,retry_at-time.monotonic()))
+            wait_for_observation(events,delay)
         if exercise and exercise_phases != {'standby','active','returned'}:
             raise RuntimeError('Self-test did not complete all three phases')
         state['completed'] = True
@@ -580,7 +624,7 @@ def main(argv=None):
             print('自动备用 LTE 当前未运行。')
         else:
             descriptions={'starting':'正在准备 LTE','standby':'Wi-Fi/有线优先，LTE 待命',
-                          'LTE':'当前由 LTE 提供联网','ready':'LTE 已就绪，数据会话未建立','return_check':'LTE 数据已关闭，正在核对原网络','retrying':'LTE 暂未就绪，等待重试'}
+                          'LTE':'当前由 LTE 提供联网','ready':'LTE 已就绪，数据会话未建立','waiting_module':'等待模块接入，将自动初始化','return_check':'LTE 数据已关闭，正在核对原网络','retrying':'LTE 暂未就绪，等待重试'}
             print('自动备用已启用：'+descriptions.get(state.get('phase'),state.get('phase','unknown')))
             if state.get('observe_only'):
                 print('当前仅观察，不会自动接管。')
@@ -625,7 +669,7 @@ def main(argv=None):
         deadline=time.monotonic()+50
         while process.poll() is None and time.monotonic()<deadline:
             state=alive()
-            if state and state.get('phase') in ('ready','standby','LTE','retrying'):
+            if state and state.get('phase') in ('ready','standby','LTE','retrying','waiting_module'):
                 print('自动备用 LTE 已启动：'+state['phase']+'。详见 auto-state.json。')
                 return 0
             time.sleep(0.25)

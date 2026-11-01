@@ -13,8 +13,14 @@ done
 # Run only the already installed, administrator-owned teardown implementation.
 # No Wi-Fi, proxy or physical interface configuration is changed.
 if /bin/launchctl print system/local.magicbay.lte.auto >/dev/null 2>&1; then
-    [ -f "$base/lte_service.py" ] || fail '旧助手缺少卸载程序，请先手动卸载旧版本。'
+    [ -f "$base/lte_auto.py" ] || fail '旧助手缺少停止程序，请先手动卸载旧版本。'
     /usr/bin/python3 -c 'from pathlib import Path; import stat; b=Path("/Library/Application Support/MagicBayLTE"); paths=[b]+list(b.glob("*.py")); assert all(not p.is_symlink() and p.stat().st_uid==0 and not p.stat().st_mode&0o022 for p in paths), "旧后台文件权限不安全，停止更新"'
-    /usr/bin/python3 -c 'import sys; sys.path.insert(0,"/Library/Application Support/MagicBayLTE"); import lte_service; lte_service.hard_stop()'
+    /bin/launchctl disable system/local.magicbay.lte.auto
+    /bin/launchctl bootout system/local.magicbay.lte.auto
+    /usr/bin/python3 "$base/lte_auto.py" stop
+    /usr/bin/python3 -c 'import subprocess,time; deadline=time.monotonic()+15
+while subprocess.run(["/bin/launchctl","print","system/local.magicbay.lte.auto"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+ if time.monotonic()>=deadline: raise SystemExit("旧后台助手仍在退出，停止更新以避免会话重叠")
+ time.sleep(0.1)'
 fi
 exit 0

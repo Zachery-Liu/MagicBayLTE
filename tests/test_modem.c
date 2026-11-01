@@ -32,6 +32,7 @@ static unsigned make_reply(unsigned char *p, unsigned cid, uint32_t tid, unsigne
     return header+size;
 }
 static unsigned queries, last_cid, interrupts, signal_queries;
+static int failure_stage;
 static uint32_t last_tid;
 static time_t fake_time=1000;
 static int fake_clock(clockid_t clock, struct timespec *t)
@@ -40,6 +41,7 @@ static int fake_control(libusb_device_handle *h,uint8_t bm,uint8_t request,uint1
                        uint16_t index,unsigned char *data,uint16_t length,unsigned timeout)
 {
     (void)h;assert(value==0 && index==0 && timeout<=500);
+    if ((failure_stage==1 && bm==0x21) || (failure_stage==2 && bm==0xa1)) return LIBUSB_ERROR_NO_DEVICE;
     if (bm==0x21) {
         assert(request==0 && (length==48 || length==84));
         assert(le32(data)==3 && le32(data+40)==0); /* QUERY only, never SET/OPEN/CLOSE */
@@ -53,7 +55,7 @@ static int fake_control(libusb_device_handle *h,uint8_t bm,uint8_t request,uint1
 }
 static int fake_interrupt(libusb_device_handle *h,unsigned char ep,unsigned char *data,
                           int length,int *actual,unsigned timeout)
-{ (void)h;(void)data;(void)length;assert(ep==0x82 && timeout==1);interrupts++;*actual=0;return LIBUSB_ERROR_TIMEOUT; }
+{ (void)h;(void)data;(void)length;assert(ep==0x82 && timeout==1);interrupts++;*actual=0;return failure_stage==3 ? LIBUSB_ERROR_NO_DEVICE : LIBUSB_ERROR_TIMEOUT; }
 static int bridge_stop;
 static void mb_log(const char *format, ...) { (void)format; }
 #define basic_uuid mb_modem_uuid
@@ -113,7 +115,20 @@ int main(void)
     assert(!strcmp(mb_modem.values.provider_name,"CHN-UNICOM") && mb_modem.signal_at[0]);
     FILE *f=fopen(path,"r");assert(f);char json[2048]={0};assert(fread(json,1,sizeof(json)-1,f)>0);fclose(f);
     assert(strstr(json,"\"provider_name\":\"CHN-UNICOM\"") && strstr(json,"\"rssi\":27"));
+    /* A removed device must terminate the stale handle on every USB path. */
+    for (failure_stage=1;failure_stage<=3;failure_stage++) {
+        bridge_stop=0;mb_modem.pending_tid=failure_stage==1 ? 0 : 123;
+        mb_modem.sent_at=fake_time-1;mb_modem.due[0]=0;
+        mb_modem_tick(NULL);assert(bridge_stop);
+    }
+    failure_stage=0;bridge_stop=0;
+    mb_modem.started_at=fake_time;mb_modem.last_response=fake_time;
+    fake_time+=74;assert(!mbm_monitor_stalled());
+    fake_time++;assert(mbm_monitor_stalled());
+    /* Valid replies, including a still-searching registration, keep it alive. */
+    mb_modem.pending_tid=123;last_tid=123;last_cid=9;mb_modem.sent_at=fake_time-1;
+    mb_modem_tick(NULL);assert(!bridge_stop && !mbm_monitor_stalled());
     unlink(path);unlink(request_path);rmdir(directory);
-    puts("PASS: provider UTF-16, malformed/fragment/session bounds, 100000 mutations, bounded same-session QUERY-only polling and JSON export");
+    puts("PASS: provider UTF-16, malformed/session bounds, 100000 mutations, bounded queries, unplug on send/read/interrupt and control-session liveness");
     return 0;
 }
