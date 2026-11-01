@@ -1,4 +1,4 @@
-# MagicBayLTE
+# Magic Bay LTE
 
 让 Lenovo Magic Bay LTE 在 Intel macOS 上成为可用的移动网络备用连接，并通过原生菜单栏应用查看状态。
 
