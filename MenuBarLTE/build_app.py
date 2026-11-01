@@ -37,7 +37,7 @@ def main():
     shutil.copyfile(BASE/'Assets/LICENSE-Octicons.txt',contents/'Resources/LICENSE-Octicons.txt')
     info={'CFBundleName':'Magic Bay LTE','CFBundleDisplayName':'Magic Bay LTE',
           'CFBundleIdentifier':'local.magicbay.lte.menu','CFBundleExecutable':'Magic Bay LTE',
-          'CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.4.2','CFBundleVersion':'10',
+          'CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.4.2','CFBundleVersion':'11',
           'CFBundleIconFile':'AppIcon','LSUIElement':True,'LSMinimumSystemVersion':'13.0',
           'NSHighResolutionCapable':True,'NSPrincipalClass':'NSApplication'}
     (contents/'Info.plist').write_bytes(plistlib.dumps(info))

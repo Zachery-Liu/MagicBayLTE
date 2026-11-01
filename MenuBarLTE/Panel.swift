@@ -70,7 +70,7 @@ struct LTEPanel: View {
                     Button("重新连接 LTE") { model.reconnect() }
                         .disabled(model.busy || !model.snapshot.enabled)
                     Divider()
-                    Link("运营商服务 · Lenovo Connect", destination: URL(string:"https://aoac.lenovoconnect.com/")!)
+                    Link("运营商服务 ↗", destination: URL(string:"https://aoac.lenovoconnect.com/")!)
                     Divider()
                     Button("打开 LTE 日志") { model.openLogs() }
                     Toggle("登录时显示图标",isOn:Binding(get:{model.loginEnabled},set:{model.setLogin($0)}))
