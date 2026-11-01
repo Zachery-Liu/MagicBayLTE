@@ -16,7 +16,7 @@ import subprocess
 import time
 import lte_control as control
 
-BASE = Path(__file__).resolve().parent
+BASE = Path(__file__).resolve().parents[1] / 'build/tools'
 
 
 def run(args, timeout=15):

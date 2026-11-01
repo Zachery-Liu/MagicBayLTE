@@ -2,19 +2,23 @@
 
 仓库：`https://github.com/Zachery-Liu/MagicBayLTE`，当前阶段保持 **Private**，Release 附件也遵循仓库访问权限。以后决定开放时再单独修改可见性，不因创建 Release 而公开仓库。
 
-## 首次发布
+## 生成发行文件
 
-1. 在自己的 GitHub 账号创建公开仓库 `MagicBayLTE`。不要另外生成 README / LICENSE，以免与本地初始提交冲突。
-2. 上传这份独立项目目录的 Git 历史，不要上传上层个人工作目录。默认分支使用 `main`。
-3. 在 Releases 创建 `v1.4.2`，先保存为 Draft / Pre-release。附上 `dist/MagicBayLTE-1.4.2-macOS-Intel.pkg`、`dist/MagicBayLTE-1.4.2-source.tar.gz`、`dist/SHA256SUMS.txt`，正文可用 `docs/RELEASE_NOTES_1.4.2.md`。
-4. 在独立测试机器或测试启动卷验证全新安装、默认关闭、启用、关闭、退出界面、重新打开、更新和卸载。任何真实 LTE 出口切换都应先安排测试窗口，不能在构建时自动断网。
-5. 检查无私人日志、状态、地址、凭据或抓包后，再公开 Release。早期硬件适配建议保留 Pre-release 标记，并收集相同 USB ID / 不同机器的反馈。
+1. 确定版本号，保持 `app/build_app.py` 中的应用版本和 `scripts/package_release.py` 中的安装包版本一致，并更新版本说明。
+2. 按 [构建说明](BUILD.md) 完成构建、离线测试、打包和解包验证。`dist/` 中会生成 `.pkg`、`-source.tar.gz` 及 `SHA256SUMS.txt`。
+3. 在测试机器或测试启动卷验证安装、更新和卸载。真实 LTE 出口切换需要单独安排测试窗口，构建脚本不执行断网测试。
+
+## GitHub Release
+
+在仓库 Releases 页面创建发行版，选择对应的 `v版本号` 标签，上传上述三个文件并填写版本说明。普通发行版的 **Release label** 选 **None**；预览版选 **Pre-release**，未完成时可保存为 Draft。
+
+Release 遵循仓库当前的访问权限，发布发行版不会把 Private 仓库改成 Public。已发布版本的安装包、源码包和校验值应作为同一组文件保留；后续代码更新使用新的版本号，不覆盖旧版附件。
 
 每个安装包都内置完整对应源码，Release 仍应提供单独的源码包。GitHub 自动生成的 Source ZIP 不能替代包含固定依赖的对应源码检查。AGPL 及第三方许可证必须随二进制保留，不能只留下仓库链接。
 
 ## 自动构建
 
-`.github/workflows/build.yml` 在 Intel macOS runner 进行纯离线构建和打包，PR 不获得仓库写入权限，成功后上传构建产物供下载。它不会安装包、不连接 LTE、不自动公开 Release。首次 GitHub CI 运行情况需发布后单独确认。
+`.github/workflows/build.yml` 在 Intel macOS runner 进行离线构建和打包，PR 不获得仓库写入权限，成功后上传构建产物供下载。它不会安装包、连接 LTE 或自动发布 Release。
 
 ## 签名与公证
 

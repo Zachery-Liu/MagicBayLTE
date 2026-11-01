@@ -1,10 +1,12 @@
 # 架构与权限
 
-`MenuBarLTE/` 是普通用户的 AppKit / SwiftUI 应用。它只读 root 后台导出的 JSON 状态，通过本地 Unix socket 发送固定的启用 / 关闭命令。后台使用 `getpeereid` 核对当前控制台用户，不接受任意命令、路径或 shell 字符串。
+`app/` 是普通用户的 AppKit / SwiftUI 应用。它只读 root 后台导出的 JSON 状态，通过本地 Unix socket 发送固定的启用 / 关闭命令。后台使用 `getpeereid` 核对当前控制台用户，不接受任意命令、路径或 shell 字符串。
 
 “重新连接 LTE”使用同样受限的固定 `R` 请求，仅允许当前控制台用户在 LTE 已启用时操作。助手核对本项目 supervisor 的进程身份后发送 SIGUSR2，supervisor 先关闭旧会话及其 utun，再开启新的控制会话；不能把这个接口用来执行 shell、重启 Wi-Fi 或改变代理。启用选择不因重新连接而改变。
 
-`lte_helper.py` 由系统 LaunchDaemon 以 root 运行，保存启用选择并管理 `lte_auto.py`。`lte_auto.py` 结合物理接口可用性、HTTPS 探测与切换策略管理 MBIM 引擎。模块的 USB 访问、临时 utun、接口计费标记及网络状态发布需要管理员权限。可执行代码安装在 root 所有且普通用户不可写的目录。
+`backend/` 包含 Python 后台模块：`lte_helper.py` 由系统 LaunchDaemon 以 root 运行，保存启用选择并管理 `lte_auto.py`。`lte_auto.py` 结合物理接口可用性、HTTPS 探测与切换策略管理 `engine/` 中的 MBIM 引擎。模块的 USB 访问、临时 utun、接口计费标记及网络状态发布需要管理员权限。
+
+构建阶段把后台模块和原生二进制暂存到 `build/runtime/`；安装后仍使用 `/Library/Application Support/MagicBayLTE/` 下的平铺布局。可执行代码安装在 root 所有且普通用户不可写的目录。源码分类不改变系统服务名称、安装位置或本地协议。
 
 物理网络正常时只运行 control-only monitor，读取 SIM / 运营商 / 信号，并确认 session 0 已停用。无物理网络后才创建数据会话。返回物理网络时，先进入“切换中”，停止实际数据会话与接口，再验证新的出口，最后显示就绪。不能只改 UI 或把网络服务降为 Scoped，否则旧连接仍可能沿 LTE 传输。
 

@@ -14,7 +14,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <libusb.h>
-#include "../magicbay_ntb.h"
+#include "../engine/magicbay_ntb.h"
 static volatile sig_atomic_t bridge_stop;
 struct event { int result, count; const unsigned char *data; };
 static struct event events[32];
@@ -37,7 +37,7 @@ static const char *fake_error(int r) { (void)r; return "mock USB error"; }
 #define libusb_bulk_transfer fake_bulk
 #define libusb_clear_halt fake_clear
 #define libusb_error_name fake_error
-#include "../magicbay_bridge.h"
+#include "../engine/magicbay_bridge.h"
 static unsigned delivered;
 static int count_packet(void *arg, const unsigned char *p, size_t n)
 { (void)arg; assert(mb_ipv4(p,n)); delivered++; return 0; }

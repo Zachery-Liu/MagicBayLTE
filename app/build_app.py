@@ -9,7 +9,8 @@ import tempfile
 import shutil
 
 BASE=Path(__file__).resolve().parent
-APP=BASE/'build/Magic Bay LTE.app'
+ROOT=BASE.parent
+APP=ROOT/'build/app/Magic Bay LTE.app'
 
 
 def run(args):
@@ -24,7 +25,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='magicbay-menu-build-') as temporary:
         directory=Path(temporary)
         run(['clang','-target','x86_64-apple-macosx13.0','-O2','-Wall','-Wextra','-Werror','-c','Telemetry.c','-o',str(directory/'Telemetry.o')])
-        cache=BASE/'build/ModuleCache'
+        cache=ROOT/'build/cache/swift'
         cache.mkdir(exist_ok=True)
         run(['swiftc','-module-cache-path',str(cache),'-O','-swift-version','5','-target','x86_64-apple-macosx13.0',
              '-import-objc-header','Telemetry.h','Models.swift','AppModel.swift','Panel.swift','GitHubMark.swift','main.swift',
@@ -47,7 +48,7 @@ def main():
     manifest={'app':str(APP),'backend_modified':False,
               'sha256':{n:hashlib.sha256((BASE/n).read_bytes()).hexdigest() for n in sources},
               'executable_sha256':hashlib.sha256((contents/'MacOS/Magic Bay LTE').read_bytes()).hexdigest()}
-    (BASE/'build/app-build.json').write_text(json.dumps(manifest,indent=2))
+    (ROOT/'build/app/app-build.json').write_text(json.dumps(manifest,indent=2))
     print(APP)
 
 

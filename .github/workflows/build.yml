@@ -19,9 +19,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Offline backend tests and build
-        run: python3 build_offline.py
+        run: python3 scripts/build.py
       - name: Native menu app tests and build
-        run: python3 MenuBarLTE/build_app.py
+        run: python3 app/build_app.py
       - name: Package without installation
         run: python3 scripts/package_release.py
       - name: Inspect package without installation

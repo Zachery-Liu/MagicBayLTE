@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-BASE = Path(__file__).resolve().parent
+BASE = Path(__file__).resolve().parents[1] / 'build/tools'
 ENGINE = BASE / 'magicbay_lte'
 STATE = BASE / 'connection-state.json'
 LOG = BASE / 'connection.log'

@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <libusb.h>
-#include "../magicbay_modem_codec.h"
+#include "../engine/magicbay_modem_codec.h"
 static uint32_t le32(const unsigned char *p) { return mbm_u32(p); }
 static void put32(unsigned char *p, uint32_t v) { for (int i=0;i<4;i++) p[i]=(v>>(i*8))&255; }
 static unsigned make_reply(unsigned char *p, unsigned cid, uint32_t tid, unsigned type)
@@ -64,7 +64,7 @@ static void mb_log(const char *format, ...) { (void)format; }
 #define libusb_control_transfer fake_control
 #define libusb_interrupt_transfer fake_interrupt
 #define clock_gettime fake_clock
-#include "../magicbay_modem.h"
+#include "../engine/magicbay_modem.h"
 int main(void)
 {
     unsigned char response[256];

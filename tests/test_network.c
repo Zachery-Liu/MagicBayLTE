@@ -63,7 +63,7 @@ static CFPropertyListRef fake_copy(SCDynamicStoreRef s, CFStringRef k)
 #define SCDynamicStoreAddTemporaryValue fake_add
 #define SCDynamicStoreSetValue fake_set
 #define SCDynamicStoreCopyValue fake_copy
-#include "../magicbay_network.h"
+#include "../engine/magicbay_network.h"
 int main(void)
 {
     unsetenv("MAGICBAY_CONTROL_FD");

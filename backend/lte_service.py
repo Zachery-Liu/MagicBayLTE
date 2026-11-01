@@ -35,7 +35,7 @@ def verify_build():
     manifest=json.loads((BASE/'build-manifest.json').read_text())
     for name in FILES:
         if hashlib.sha256((BASE/name).read_bytes()).hexdigest()!=manifest['sha256'][name]:
-            raise RuntimeError('程序与离线构建清单不同步，请先运行 build_offline.py。')
+            raise RuntimeError('程序与离线构建清单不同步，请先运行 scripts/build.py。')
     return manifest
 
 

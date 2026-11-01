@@ -26,7 +26,7 @@ static int receive_one(libusb_device_handle *h,unsigned char *p,int max) {
 }
 static int fake_usleep(useconds_t n) { (void)n;return 0; }
 #define usleep fake_usleep
-#include "../magicbay_session.h"
+#include "../engine/magicbay_session.h"
 #undef usleep
 static void reset(void) { next=count=0;bridge_stop=mb_shutting_down=0;mb_session_base=0x10000000; }
 static void push(int result,uint32_t type,uint32_t tid,uint32_t length) {

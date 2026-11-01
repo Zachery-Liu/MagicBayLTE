@@ -17,14 +17,16 @@ def main():
     archive = BASE / 'third_party/libusb-1.0.29.tar.bz2'
     if hashlib.sha256(archive.read_bytes()).hexdigest() != SHA256:
         raise SystemExit('libusb archive checksum mismatch')
-    source = BASE / 'libusb-1.0.29'
+    dependencies = BASE / 'build/deps'
+    dependencies.mkdir(parents=True, exist_ok=True)
+    source = dependencies / 'libusb-1.0.29'
     if not source.exists():
         with tarfile.open(archive) as tar:
             for member in tar.getmembers():
                 parts = Path(member.name).parts
                 if not parts or parts[0] != source.name or '..' in parts or member.issym() or member.islnk():
                     raise SystemExit('Unsafe dependency archive entry')
-            tar.extractall(BASE)
+            tar.extractall(dependencies)
     stamp = source / '.magicbay-build-flags'
     flags = '-O2 -arch x86_64 -mmacosx-version-min=13.0'
     if not stamp.exists() or stamp.read_text() != flags:

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Package previously validated builds; never install or start an LTE service."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ VERSION = '1.4.2'
 IDENTIFIER = 'io.github.zachery-liu.magicbaylte'
 RUNTIME = ('lte_auto.py', 'failover_policy.py', 'magicbay_lte_managed',
            'lte_helper.py', 'network_events.py', 'magicbay_network_watch', 'lte_service.py')
+RUNTIME_DIR = BASE / 'build/runtime'
 
 
 def digest(path):
@@ -25,32 +27,31 @@ def digest(path):
 def public_files():
     # Explicit source inventory prevents accidentally publishing local diagnostic
     # logs, private states, captures, caches, old app bundles or nested .git data.
-    names = ['README.md', 'LICENSE', 'NOTICE', 'LICENSE-cellular.txt', 'CHANGELOG.md',
-             'CONTRIBUTING.md', '.gitignore', '.gitattributes', 'adapt_engine.py', 'build_offline.py',
-             'lte_auto.py', 'failover_policy.py', 'lte_helper.py', 'lte_service.py',
-             'network_events.py', 'network_watch.c', 'lte_control.py', 'test_data.py']
-    for pattern in ('magicbay_*.h', 'tests/*.py', 'tests/*.c', 'MenuBarLTE/*.swift',
-                    'MenuBarLTE/*.h', 'MenuBarLTE/*.c', 'MenuBarLTE/build_app.py',
-                    'MenuBarLTE/Assets/*', 'scripts/*.py', 'packaging/scripts/*',
+    names = ['README.md', 'LICENSE', 'NOTICE', 'CHANGELOG.md',
+             'CONTRIBUTING.md', '.gitignore', '.gitattributes']
+    for pattern in ('backend/*.py', 'engine/*.h', 'engine/*.c', 'engine/*.py',
+                    'tools/*.py', 'tests/*.py', 'tests/*.c', 'app/*.swift',
+                    'app/*.h', 'app/*.c', 'app/*.py',
+                    'app/Assets/*', 'scripts/*.py', 'packaging/scripts/*',
                     'packaging/*.py', 'docs/*.md', 'third_party/*', 'licenses/*',
-                    'reference-cellular/LICENSE', 'reference-cellular/UPSTREAM.json',
-                    'reference-cellular/Sources/mbim_lte.c', '.github/workflows/*.yml'):
+                    'third_party/cellular/LICENSE', 'third_party/cellular/UPSTREAM.json',
+                    'third_party/cellular/Sources/mbim_lte.c', '.github/workflows/*.yml'):
         names.extend(str(p.relative_to(BASE)) for p in BASE.glob(pattern) if p.is_file())
     return sorted(set(names))
 
 
 def verify():
-    backend = json.loads((BASE / 'build-manifest.json').read_text())
+    backend = json.loads((BASE / 'build/validation/backend.json').read_text())
     if backend.get('offline_tests') != 'passed':
         raise RuntimeError('Offline validation has not passed')
     for name, sha in backend['sha256'].items():
         if digest(BASE / name) != sha:
             raise RuntimeError('Stale backend build: ' + name)
-    app_manifest = json.loads((BASE / 'MenuBarLTE/build/app-build.json').read_text())
+    app_manifest = json.loads((BASE / 'build/app/app-build.json').read_text())
     for name, sha in app_manifest['sha256'].items():
-        if digest(BASE / 'MenuBarLTE' / name) != sha:
+        if digest(BASE / 'app' / name) != sha:
             raise RuntimeError('Stale app build: ' + name)
-    app = BASE / 'MenuBarLTE/build/Magic Bay LTE.app'
+    app = BASE / 'build/app/Magic Bay LTE.app'
     if digest(app / 'Contents/MacOS/Magic Bay LTE') != app_manifest['executable_sha256']:
         raise RuntimeError('App executable changed')
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
@@ -66,10 +67,14 @@ def verify():
     return backend, app
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, default=BASE / 'dist',
+                        help='Output directory; use a separate path when validating an existing release version.')
+    args = parser.parse_args(argv)
     backend, app = verify()
-    out = BASE / 'dist'
-    out.mkdir(exist_ok=True)
+    out = args.output.resolve()
+    out.mkdir(parents=True, exist_ok=True)
     prefix = 'MagicBayLTE-' + VERSION
     source = out / (prefix + '-source.tar.gz')
     inventory = {name: digest(BASE / name) for name in public_files()}
@@ -84,7 +89,7 @@ def main():
             target.chmod(0o755 if name.startswith('packaging/scripts/') else 0o644)
         (source_root / 'SOURCE_MANIFEST.json').write_text(json.dumps({
             'version': VERSION, 'source_sha256': inventory,
-            'binary_sha256': {name: digest(BASE / name) for name in RUNTIME},
+            'binary_sha256': {name: digest(RUNTIME_DIR / name) for name in RUNTIME},
             'offline_tests': backend['offline_tests']}, indent=2) + '\n')
         with tarfile.open(source, 'w:gz') as tar:
             for path in sorted(source_root.rglob('*')):
@@ -104,24 +109,25 @@ def main():
         target = payload / 'Library/Application Support/MagicBayLTE'
         target.mkdir(parents=True)
         for name in RUNTIME:
-            shutil.copyfile(BASE / name, target / name)
+            shutil.copyfile(RUNTIME_DIR / name, target / name)
             (target / name).chmod(0o755 if not name.endswith('.py') else 0o644)
         shutil.copyfile(BASE / 'packaging/uninstall.py', target / 'uninstall.py')
         (target / 'installed-build.json').write_text(json.dumps({
             'version': VERSION, 'offline_tests': 'passed',
-            'sha256': {name: digest(BASE / name) for name in RUNTIME}}, indent=2) + '\n')
+            'sha256': {name: digest(RUNTIME_DIR / name) for name in RUNTIME}}, indent=2) + '\n')
         sources = target / 'Source'
         sources.mkdir()
         shutil.copyfile(source, sources / source.name)
-        for name in ('LICENSE', 'NOTICE', 'README.md', 'LICENSE-cellular.txt'):
+        for name in ('LICENSE', 'NOTICE', 'README.md'):
             shutil.copyfile(BASE / name, sources / name)
+        shutil.copyfile(BASE / 'third_party/cellular/LICENSE', sources / 'LICENSE-cellular.txt')
         shutil.copyfile(BASE / 'licenses/LGPL-2.1.txt', sources / 'LGPL-2.1.txt')
-        shutil.copyfile(BASE / 'MenuBarLTE/Assets/LICENSE-Octicons.txt', sources / 'LICENSE-Octicons.txt')
+        shutil.copyfile(BASE / 'app/Assets/LICENSE-Octicons.txt', sources / 'LICENSE-Octicons.txt')
         daemon = payload / 'Library/LaunchDaemons/local.magicbay.lte.auto.plist'
         daemon.parent.mkdir(parents=True)
         # Importing the installer module only defines functions; it has no actions.
         import sys
-        sys.path.insert(0, str(BASE))
+        sys.path.insert(0, str(BASE / 'backend'))
         import lte_service
         daemon.write_bytes(plistlib.dumps(lte_service.definition()))
         scripts = work / 'scripts'

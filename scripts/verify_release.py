@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Expand and inspect a package without installing or executing its scripts."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import subprocess
@@ -15,8 +16,10 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def main():
-    out = BASE / 'dist'
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, default=BASE / 'dist')
+    out = parser.parse_args(argv).output.resolve()
     for line in (out / 'SHA256SUMS.txt').read_text().splitlines():
         expected, name = line.split('  ', 1)
         assert Path(name).name == name

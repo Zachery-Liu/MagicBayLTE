@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <libusb.h>
-#include "../magicbay_modem_codec.h"
+#include "../engine/magicbay_modem_codec.h"
 static volatile sig_atomic_t bridge_stop;
 static struct {struct mb_modem_values values;} mb_modem;
 static const unsigned char basic_uuid[16]={0xa2,0x89,0xcc,0x33,0xbc,0xbb,0x8b,0x4f,0xb6,0xb0,0x13,0x3e,0xc2,0xaa,0xe6,0xdf};
@@ -40,7 +40,7 @@ static void mbim_deactivate_session0_quiet(libusb_device_handle *h,uint32_t tid,
 #define IF_CTRL 0
 #define libusb_control_transfer fake_transfer
 #define MB_IDLE_READY() do {assert(mb_modem.values.activation_state==3);ready_count++;} while(0)
-#include "../magicbay_idle.h"
+#include "../engine/magicbay_idle.h"
 static void reset(int state) {device_state=state;stalled=fail_deactivation=deactivations=queries=ready_count=ticks=0;bridge_stop=0;}
 int main(void) {
  int fds[2];assert(!pipe(fds));char value[20];snprintf(value,sizeof(value),"%d",fds[0]);setenv("MAGICBAY_CONTROL_FD",value,1);

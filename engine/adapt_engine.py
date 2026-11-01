@@ -6,8 +6,10 @@ import json
 import shutil
 import subprocess
 
-base = Path(__file__).resolve().parent
-source = base / 'reference-cellular/Sources/mbim_lte.c'
+root = Path(__file__).resolve().parents[1]
+base = root / 'build/engine'
+base.mkdir(parents=True, exist_ok=True)
+source = root / 'third_party/cellular/Sources/mbim_lte.c'
 s = source.read_text()
 
 def replace(old, new, count=1):
@@ -216,10 +218,9 @@ replace('''cleanup:
         libusb_release_interface(h, IF_DATA);
     }''')
 
-header = '// Adapted for Lenovo Magic Bay LTE 17ef:7240; upstream MIT license in LICENSE-cellular.txt.\n'
+header = '// Adapted for Lenovo Magic Bay LTE 17ef:7240; upstream MIT license in third_party/cellular/LICENSE.\n'
 (base/'magicbay_lte.c').write_text(header+s)
-shutil.copyfile(base/'reference-cellular/LICENSE',base/'LICENSE-cellular.txt')
-upstream = json.loads((base/'reference-cellular/UPSTREAM.json').read_text())
+upstream = json.loads((root/'third_party/cellular/UPSTREAM.json').read_text())
 assert hashlib.sha256(source.read_bytes()).hexdigest() == upstream['source_sha256'], 'Upstream source changed; review and update its pin.'
 commit = upstream['commit']
 (base/'engine-source.json').write_text(json.dumps({'upstream_commit':commit,'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'adapted_sha256':hashlib.sha256((base/'magicbay_lte.c').read_bytes()).hexdigest()},indent=2))
